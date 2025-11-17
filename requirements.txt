@@ -12,4 +12,6 @@ torch
 ultralytics
 django-cors-headers
 djangorestframework-simplejwt
+nltk
+
 
