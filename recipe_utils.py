@@ -1,12 +1,13 @@
 import json
-import os
 import random
-from django.conf import settings  # 🔥 BASE_DIR için
+from pathlib import Path
 
-# JSON dosyasının tam yolu (repo kökünde duruyor)
-JSON_PATH = os.path.join(settings.BASE_DIR, "cleaned_recipes_fixed.json")
+# Bu dosyanın bulunduğu klasör
+BASE_DIR = Path(__file__).resolve().parent
 
-# JSON verisini yükle
+# JSON dosyasının tam yolu (recipe_utils.py ile aynı klasörde)
+JSON_PATH = BASE_DIR / "cleaned_recipes_fixed.json"
+
 try:
     with open(JSON_PATH, "r", encoding="utf-8") as f:
         raw_data = json.load(f)
@@ -82,7 +83,6 @@ def tarif_bul(malzemeler):
         return [random.choice(matches)]
 
     if len(matches) > 3:
-        # Önce 1 tane dönüyordun, istersen 3 yapabilirsin
         return random.sample(matches, 1)
 
     return matches
