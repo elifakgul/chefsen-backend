@@ -1,24 +1,45 @@
-from fastapi import FastAPI, UploadFile, File, Form
+from fastapi import FastAPI, UploadFile, File, Form, Query
+from fastapi.middleware.cors import CORSMiddleware
 from yolov8_analyzer import gorsel_analiz
 from recipe_utils import tarif_bul, recipes
-from chatbot import analiz_et  # Bunu ekledik!
-from fastapi import Query
+from chatbot import analiz_et
+from pathlib import Path
 import json
-from fastapi.middleware.cors import CORSMiddleware
-
-
 import random
 
-app = FastAPI()
+app = FastAPI(title="ChefSen FastAPI")
+
+# 🌐 CORS AYARI
+# Frontend + local geliştirme origin'leri
+origins = [
+    "https://chefsen-frontend.onrender.com",
+    "http://localhost:5173",
+    "http://127.0.0.1:8001",
+    "http://127.0.0.1:8000",
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # veya sadece frontend: ["http://localhost:5173"]
+    allow_origins=origins,      # istersen geçici olarak ["*"] de bırakabilirsin
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
+# 📂 JSON dosya yolu (bu dosyanın yanındaki kalori_verisi.json)
+BASE_DIR = Path(__file__).resolve().parent
+KALORI_JSON_PATH = BASE_DIR / "kalori_verisi.json"
 
+# JSON verisini yükle (bir kere yükle yeter)
+try:
+    with open(KALORI_JSON_PATH, "r", encoding="utf-8") as f:
+        kalori_data = json.load(f)
+except FileNotFoundError:
+    print(f"[fastapi] kalori_verisi.json bulunamadı: {KALORI_JSON_PATH}")
+    kalori_data = []
+
+
+# 👨‍🍳 METİN TABANLI CHEF SORU ENDPOINTİ
 @app.post("/api/soru")
 async def soruya_cevap(soru: str = Form(...)):
     cevaplar = analiz_et(soru)
@@ -28,11 +49,17 @@ async def soruya_cevap(soru: str = Form(...)):
         rastgele = random.choice(recipes)
         return {
             "girdi": soru,
-            "oneriler": [(rastgele["Name"], 0, rastgele["RecipeDetails"])]
+            "oneriler": [{
+                "isim": rastgele["Name"],
+                "malzemeler": rastgele.get("IngridientNames", ""),
+                "tarif": rastgele.get("RecipeDetails", "").split("\n"),
+            }]
         }
 
     return {"girdi": soru, "oneriler": cevaplar}
 
+
+# 📷 GÖRSEL TABANLI CHEF ENDPOINTİ
 @app.post("/api/foto")
 async def foto_ile_cevap(file: UploadFile = File(...)):
     path = f"temp_{file.filename}"
@@ -42,18 +69,16 @@ async def foto_ile_cevap(file: UploadFile = File(...)):
     # YOLO ile malzeme tespiti
     malzemeler = gorsel_analiz(path)
 
-    # Tarifleri bul (zaten detaylı formatta dönüyor)
+    # Tarifleri bul (detaylı formatta dönüyor)
     tarifler = tarif_bul(malzemeler)
 
     return {
-        "tespit_edilen_malzemeler": malzemeler,  # 🧠 Bunu ekledik!
-        "oneriler": tarifler
+        "tespit_edilen_malzemeler": malzemeler,
+        "oneriler": tarifler,
     }
 
-# JSON verisini yükle (bir kere yükle yeter)
-with open("kalori_verisi.json", "r", encoding="utf-8") as f:
-    kalori_data = json.load(f)
 
+# 🔥 KALORİBOT MANTIĞI
 def kaloribot_sor(soru: str, limit: int = 10):
     soru = soru.lower().strip()
 
@@ -90,6 +115,8 @@ def kaloribot_sor(soru: str, limit: int = 10):
         return {"cevaplar": parcali_eslesenler[:limit]}
     return {"cevap": "Kalori bilgisi bulunamadı, farklı bir yemek adı deneyebilirsin."}
 
+
+# 🌡 KALORİ ENDPOINTİ
 @app.get("/kalori/")
 def kalori_sorgula(
     soru: str = Query(..., description="Kalorisini öğrenmek istediğin şey"),
