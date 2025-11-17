@@ -1,10 +1,18 @@
 import json
-import re
+import os
 import random
+from django.conf import settings  # 🔥 BASE_DIR için
+
+# JSON dosyasının tam yolu (repo kökünde duruyor)
+JSON_PATH = os.path.join(settings.BASE_DIR, "cleaned_recipes_fixed.json")
 
 # JSON verisini yükle
-with open("cleaned_recipes_fixed.json", "r", encoding="utf-8") as f:
-    raw_data = json.load(f)
+try:
+    with open(JSON_PATH, "r", encoding="utf-8") as f:
+        raw_data = json.load(f)
+except FileNotFoundError:
+    print(f"[recipe_utils] JSON bulunamadı: {JSON_PATH}")
+    raw_data = {}
 
 # Tarifleri al
 all_recipes = raw_data.get("Recipe", {})
@@ -17,61 +25,19 @@ recipes = [
     and "IngridientNames" in r
     and isinstance(r["IngridientNames"], str)
 ]
-"""
-# 🎯 Kategori bazlı eşleşme
-def tarif_bul_kategori(kategori_adi):
-    matches = [
-        (r["Name"], 1, r["RecipeDetails"])
-        for r in recipes
-        if "CategoryBread" in r and r["CategoryBread"].upper() == kategori_adi.upper()
-    ]
-    if len(matches) > 3:
-        return random.sample(matches, 3)
-    elif matches:
-        return matches
-    else:
-        return ["Bu kategoriye ait tarif bulunamadı 🤔"]
 
-# 🎯 Malzeme bazlı eşleşme (esnek & ALL mantığı)
-def tarif_bul(malzemeler):
-    matches = []
-    for r in recipes:
-        # Tarif malzemelerini parçala (örneğin: 'dana kıyma', 'patates', 'sarımsak')
-        tarif_kelimeleri = [w.lower().strip() for i in r["IngridientNames"].split(";") for w in i.split()]
-        
-        # Her malzemenin tarifte geçip geçmediğini kontrol et (esnek eşleşme)
-        tumu_var_mi = all(
-            any(m in tk or tk in m for tk in tarif_kelimeleri)
-            for m in malzemeler
-        )
-
-        if tumu_var_mi:
-            matches.append((r["Name"], len(malzemeler), r["RecipeDetails"]))
-
-    # ❌ Hiçbir tarif bulunamadıysa
-    if not matches:
-        return ["Sorunu tam anlayamadım 🤔 Daha açık yazar mısın ya da farklı bir şekilde sorar mısın?"]
-
-    # ✅ Eğer sadece 1 malzeme verdiyse → sadece 1 tane rastgele tarif
-    if len(malzemeler) == 1:
-        return [random.choice(matches)]
-
-    # ✅ Diğer durumlarda max 3 tarif döndür
-    if len(matches) > 3:
-        return random.sample(matches, 3)
-
-    return matches
-"""
 
 def tarif_bul_kategori(kategori_adi):
     matches = [
         {
             "isim": r["Name"],
-            "malzemeler": r["IngridientNames"],
-            "tarif": r["RecipeDetails"].split("\n")
+            "malzemeler": r.get("IngridientNames", ""),
+            "tarif": r.get("RecipeDetails", "").split("\n"),
         }
         for r in recipes
-        if "CategoryBread" in r and r["CategoryBread"].upper() == kategori_adi.upper()
+        if "CategoryBread" in r
+        and isinstance(r["CategoryBread"], str)
+        and r["CategoryBread"].upper() == kategori_adi.upper()
     ]
 
     if len(matches) > 3:
@@ -80,12 +46,23 @@ def tarif_bul_kategori(kategori_adi):
         return matches
     else:
         return ["Bu kategoriye ait tarif bulunamadı "]
-    
+
+
 def tarif_bul(malzemeler):
     matches = []
     for r in recipes:
-        tarif_kelimeleri = [w.lower().strip() for i in r["IngridientNames"].split(";") for w in i.split()]
-        
+        ing = r.get("IngridientNames")
+        if not isinstance(ing, str):
+            continue
+
+        # Malzemeleri parçala
+        tarif_kelimeleri = [
+            w.lower().strip()
+            for i in ing.split(";")
+            for w in i.split()
+        ]
+
+        # Her malzeme tarifte esnek olarak geçiyor mu?
         tumu_var_mi = all(
             any(m in tk or tk in m for tk in tarif_kelimeleri)
             for m in malzemeler
@@ -94,8 +71,8 @@ def tarif_bul(malzemeler):
         if tumu_var_mi:
             matches.append({
                 "isim": r["Name"],
-                "malzemeler": r["IngridientNames"],
-                "tarif": r["RecipeDetails"].split("\n")
+                "malzemeler": ing,
+                "tarif": r.get("RecipeDetails", "").split("\n"),
             })
 
     if not matches:
@@ -105,6 +82,7 @@ def tarif_bul(malzemeler):
         return [random.choice(matches)]
 
     if len(matches) > 3:
+        # Önce 1 tane dönüyordun, istersen 3 yapabilirsin
         return random.sample(matches, 1)
 
     return matches
