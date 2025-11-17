@@ -110,12 +110,8 @@ WSGI_APPLICATION = 'bitirmeb3.wsgi.application'
 
 DATABASES = {
     'default': {
-        'ENGINE': 'django.db.backends.mysql',
-        'NAME': 'mydatabase3',  # Veritabanı adı
-        'USER': 'root',  # MySQL kullanıcı adı
-        'PASSWORD': 'elifsrk48',  # MySQL şifreniz
-        'HOST': 'localhost',
-        'PORT': '3306',
+        'ENGINE': "django.db.backends.sqlite3",
+        'NAME': BASE_DIR / "db.sqlite3",
     }
 }
 
