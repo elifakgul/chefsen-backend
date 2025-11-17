@@ -10,3 +10,5 @@ opencv-python
 requests
 torch
 ultralytics
+django-cors-headers
+
