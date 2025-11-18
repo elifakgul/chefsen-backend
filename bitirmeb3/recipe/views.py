@@ -9,6 +9,9 @@ import requests
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.utils.decorators import method_decorator
+import json
+
+FASTAPI_URL = "https://chefsen-fastapi1.onrender.com"
 
 
 
@@ -39,22 +42,36 @@ class RecipeDetailView(generics.RetrieveUpdateDestroyAPIView):
                 raise PermissionDenied("Bu tarifi güncelleme veya silme yetkiniz yok!")
         return recipe
     
+
 @csrf_exempt
 def chatbot_cevap(request):
     if request.method == "POST":
-        soru = request.POST.get("soru", "")
+        # JSON veya form-data ikisini de destekle
         try:
-            response = requests.post("http://127.0.0.1:8001/api/soru", data={"soru": soru})
+            body = json.loads(request.body.decode("utf-8"))
+        except:
+            body = {}
+
+        soru = body.get("soru") or request.POST.get("soru")
+
+        if not soru:
+            return JsonResponse({"error": "'soru' parametresi zorunludur"}, status=400)
+
+        try:
+            response = requests.post(
+                f"{FASTAPI_URL}/api/soru",
+                json={"soru": soru},  # JSON formatında gönder
+                timeout=15
+            )
             return JsonResponse(response.json())
         except Exception as e:
-            return JsonResponse({"error": "Chatbot sistemine ulaşılamadı", "detay": str(e)}, status=500)
-    
-    elif request.method == "GET":
-        return JsonResponse({
-            "bilgi": "Lütfen POST isteği ile 'soru' parametresi gönderin. Örnek: {'soru': 'patates ile ne yapılır?'}"
-        })
+            return JsonResponse(
+                {"error": "Chatbot servisine ulaşılamadı", "detay": str(e)},
+                status=500
+            )
 
-    return JsonResponse({"error": "Yalnızca GET ve POST destekleniyor."}, status=405)
+    return JsonResponse({"message": "POST isteği gönderin"})
+
 
 
 @csrf_exempt
@@ -62,18 +79,22 @@ def chatbot_foto(request):
     if request.method == "POST":
         foto = request.FILES.get("foto")
         if not foto:
-            return JsonResponse({"error": "Fotoğraf dosyası eksik"}, status=400)
+            return JsonResponse({"error": "Fotoğraf gönderilmedi"}, status=400)
 
         try:
-            files = {"file": (foto.name, foto.read(), foto.content_type)}
-            response = requests.post("http://127.0.0.1:8001/api/foto", files=files)
+            files = {
+                "file": (foto.name, foto.read(), foto.content_type)
+            }
+            response = requests.post(
+                f"{FASTAPI_URL}/api/foto",
+                files=files,
+                timeout=20
+            )
             return JsonResponse(response.json())
         except Exception as e:
-            return JsonResponse({"error": "Görsel işleme sırasında hata oluştu", "detay": str(e)}, status=500)
-    
-    elif request.method == "GET":
-        return JsonResponse({
-            "bilgi": "Lütfen POST ile bir görsel yükleyin. Form field: 'foto'"
-        })
+            return JsonResponse(
+                {"error": "Görsel işleme servisine ulaşılamadı", "detay": str(e)},
+                status=500
+            )
 
-    return JsonResponse({"error": "Yalnızca GET ve POST destekleniyor."}, status=405)
+    return JsonResponse({"message": "POST isteği gerekli"})
